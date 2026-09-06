@@ -1,1 +1,16 @@
+#!/bin/sh /etc/rc.common
+START=99
 
+start() {
+    chmod +x /usr/bin/mac-switch.sh
+    # 读取用户设置的检查间隔（分钟），默认为5分钟
+    INTERVAL=$(uci get mac-switch.@settings[0].interval 2>/dev/null)
+    [ -z "$INTERVAL" ] && INTERVAL=5
+    
+    # 写入定时任务
+    (crontab -l 2>/dev/null; echo "*/$INTERVAL * * * * /usr/bin/mac-switch.sh") | sort -u | crontab -
+}
+
+stop() {
+    crontab -l | grep -v 'mac-switch.sh' | crontab -
+}
