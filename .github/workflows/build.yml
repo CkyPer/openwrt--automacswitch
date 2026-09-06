@@ -1,40 +1,71 @@
-name: Build OpenWrt Package for IPQ60xx
+name: Build MAC Switch Plugin
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch: # 允许手动触发
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-22.04
     steps:
-    - name: 检出代码
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    - name: 安装编译依赖
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
-        gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
-        libssl-dev python3 unzip wget python3-setuptools xsltproc zlib1g-dev
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-- name: 下载 OpenWrt 24.10.6 SDK (qualcommax/ipq60xx)
-  run: |
-    wget https://downloads.openwrt.org/releases/24.10.6/targets/qualcommax/ipq60xx/openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64.tar.xz
-    tar -xJf openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64.tar.xz
-    mv openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64 sdk
+      - name: Prepare Build Environment (Compile SDK)
+        run: |
+          # 1. 克隆与 Kwrt 24.10 对应的 OpenWrt 主分支源码 (Snapshot)
+          git clone --depth 1 https://git.openwrt.org/openwrt/openwrt.git source
+          cd source
 
-    - name: 导入插件并编译
-      run: |
-        cp -r mac-switch openwrt-sdk/package/
-        cd openwrt-sdk
-        make defconfig
-        make package/mac-switch/compile V=s
+          # 2. 更新 feeds (LuCI 核心依赖)
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-    - name: 上传编译产物
-      uses: actions/upload-artifact@v4
-      with:
-        name: mac-switch-ipk-qualcommax-ipq60xx
-        path: openwrt-sdk/bin/packages/qualcommax/ipq60xx/base/mac-switch*.ipk
+          # 3. 生成 .config 配置文件
+          # 关键点：开启 SDK 编译选项，并指定 qualcommax/ipq60xx 目标
+          cat >> .config <<EOF
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq60xx=y
+          CONFIG_DEVEL=y
+          CONFIG_BUILD_SDK=y
+          CONFIG_PACKAGE_macchanger=y
+          EOF
+
+          # 4. 编译 SDK (这步比较耗时，大约需要 30-60 分钟)
+          make defconfig
+          make tools/install -j$(nproc)
+          make toolchain/install -j$(nproc)
+          make target/compile -j$(nproc)
+          make sdk -j$(nproc) IGNORE_ERRORS=m
+
+      - name: Build Plugin
+        run: |
+          # 1. 找到编译好的 SDK 压缩包并解压
+          cd source/bin/targets/qualcommax/ipq60xx
+          SDK_FILE=$(ls openwrt-sdk-*-qualcommax-ipq60xx_*.tar.xz)
+          tar -xJf $SDK_FILE
+          
+          # 进入 SDK 目录
+          SDK_DIR=$(ls -d openwrt-sdk-*-qualcommax-ipq60xx_*)
+          cd $SDK_DIR
+
+          # 2. 将你的插件源码复制到 SDK 的 package 目录
+          mkdir -p package/mac-switch
+          cp -r $GITHUB_WORKSPACE/mac-switch/* package/mac-switch/
+
+          # 3. 更新 feeds 确保 LuCI 库存在
+          ./scripts/feeds update luci
+          ./scripts/feeds install -a -p luci
+
+          # 4. 编译你的插件
+          make package/mac-switch/compile V=s
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-switch-ipk
+          path: source/bin/targets/qualcommax/ipq60xx/openwrt-sdk-*/bin/packages/*/mac-switch/*.ipk
