@@ -20,11 +20,11 @@ jobs:
         gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
         libssl-dev python3 unzip wget python3-setuptools xsltproc zlib1g-dev
 
-    - name: 下载 OpenWrt 24.10 SDK (qualcommax/ipq60xx)
-      run: |
-        wget https://downloads.openwrt.org/releases/24.10.0/targets/qualcommax/ipq60xx/openwrt-sdk-24.10.0-qualcommax-ipq60xx.Linux-x86_64.tar.xz
-        tar -xf openwrt-sdk-*.tar.xz
-        mv openwrt-sdk-* openwrt-sdk
+- name: 下载 OpenWrt 24.10.6 SDK (qualcommax/ipq60xx)
+  run: |
+    wget https://downloads.openwrt.org/releases/24.10.6/targets/qualcommax/ipq60xx/openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64.tar.xz
+    tar -xJf openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64.tar.xz
+    mv openwrt-sdk-24.10.6-qualcommax-ipq60xx_gcc-13.3.0_musl.Linux-x86_64 sdk
 
     - name: 导入插件并编译
       run: |
