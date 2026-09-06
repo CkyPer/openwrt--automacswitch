@@ -1,0 +1,40 @@
+name: Build OpenWrt Package for IPQ60xx
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 安装编译依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
+        gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
+        libssl-dev python3 unzip wget python3-setuptools xsltproc zlib1g-dev
+
+    - name: 下载 OpenWrt 24.10 SDK (qualcommax/ipq60xx)
+      run: |
+        wget https://downloads.openwrt.org/releases/24.10.0/targets/qualcommax/ipq60xx/openwrt-sdk-24.10.0-qualcommax-ipq60xx.Linux-x86_64.tar.xz
+        tar -xf openwrt-sdk-*.tar.xz
+        mv openwrt-sdk-* openwrt-sdk
+
+    - name: 导入插件并编译
+      run: |
+        cp -r mac-switch openwrt-sdk/package/
+        cd openwrt-sdk
+        make defconfig
+        make package/mac-switch/compile V=s
+
+    - name: 上传编译产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: mac-switch-ipk-qualcommax-ipq60xx
+        path: openwrt-sdk/bin/packages/qualcommax/ipq60xx/base/mac-switch*.ipk
